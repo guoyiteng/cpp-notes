@@ -461,17 +461,34 @@ It tends to break the encapsulation and possibly leads to dangling handles.
 
 ## Item 31: Minimize compilation dependencies between files.
 
-- Forward Declaration: Use forward declaration instead of `#include` to replace dependencies on *definitions* with dependencies on *declarations*.
+### Forward Declaration
+Use forward declaration instead of `#include` to replace dependencies on *definitions* with dependencies on *declarations*.
 ```c++
 class Date;
 
 Date today();
 void clearAppointments(Date d);
 ```
-We call it incomplete type. It is possible to use incomplete type to declare functions parameter/return type. Its pointer/reference type can be used anywhere since we don't need the incomplete type's information to acquire the size of a pointer. However, it is impossible to use it as a class member, in a function definition, or as a template parameter. For more details and examples, refer to [here](./item31.cpp)
-- 
+We call it incomplete type. It is possible to use incomplete type to declare functions parameter/return type. Its pointer/reference type can be used anywhere since we don't need the incomplete type's information to acquire the size of a pointer. However, it is impossible to use it as a class member, in a function definition, or as a template parameter. Refer to [`item31.cpp`](./item31.cpp) for more details and examples. Forward headers such as `<iosfwd>` utilize this feature and should be preferred if exist.
+
+###  Handle Classes
+
+Employ the pimpl idiom and only expose a pointer in the header file. With the help of forward declaration, we can get rid of the dependencies on definitions.
+
+### Interface Classes
+
+Expose an interface class with no data members, no constructors, a virtual destructor, and a set of pure virtual functions. Then, the concrete class can inherit this interface to provide the implementation and hide its definition from clients. The trick here is to have a static factory method in the interface class such as
+```c++
+std::tr1::shared_ptr<Person> Person::create(const std::string& name, const Date& birthday, const Address& addr)
+{
+	return std::tr1::shared_ptr<Person>(new RealPerson( name, birthday, addr));
+}
+```
+
+Note that this function's declaration does not depend on `RealPerson` so it decouples interfaces from implementations.
 
 # Inheritance and Object-Oriented Design
 
-##  Item 32: Make sure public inheritance models "is-a."
+##  Item 32: Make sure public inheritance models "is-a".
 
+## Item 33: Avoid hiding inherited names.
