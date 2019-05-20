@@ -492,3 +492,41 @@ Note that this function's declaration does not depend on `RealPerson` so it deco
 ##  Item 32: Make sure public inheritance models "is-a".
 
 ## Item 33: Avoid hiding inherited names.
+
+```c++
+class Base {
+public:
+  virtual void mf1() = 0;
+  virtual void mf1(int);
+};
+class Derived: public Base {
+public:
+  void mf1();
+};
+
+Derived d;
+d.mf1(); // fine, calls Derived::mf1
+d.mf1(42); // compiler error! Derived::mf1 hides Base::mf1
+```
+
+When we declare a method with name `mf1`, it hides everything named `mf1` from the `Base` class by c++ scoping rules (search first in current class then in base class). Scoping rules only care about name but not signature. To resolve this problem and expose both versions of `mf1`, we should do the following:
+
+```c++
+class Base {
+public:
+  virtual void mf1() = 0;
+  virtual void mf1(int);
+};
+class Derived: public Base {
+public:
+  using Base::mf1;
+  void mf1();
+};
+
+Derived d;
+d.mf1(); // fine, calls Derived::mf1
+d.mf1(42); // fine, calls Base::mf1(int)
+```
+
+## Item 34: Differentiate between inheritance of interface and inheritance of implementation.
+
