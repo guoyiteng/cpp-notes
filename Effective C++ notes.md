@@ -520,7 +520,7 @@ public:
 class Derived: public Base {
 public:
   using Base::mf1;
-  void mf1();
+  virtual void mf1();
 };
 
 Derived d;
@@ -530,3 +530,26 @@ d.mf1(42); // fine, calls Base::mf1(int)
 
 ## Item 34: Differentiate between inheritance of interface and inheritance of implementation.
 
+- Pure virtual function: inherit a function interface only.
+
+  - It is possible to provide an implementation for a pure virtual function. It is useful when one wants to forbid implicit inheritance of the default implementation. It forces programmers to provide an implementation for the virtual function explicitly and retains the convenience of the default implementation.
+```c++
+class Airplane {
+public:
+	virtual void fly(const Airport& destination) = 0; 
+};
+
+void Airplane::fly(const Airport& destination) { /* default implementation */}
+
+class ModelA: public Airplane {
+public:
+  virtual void fly(const Airport& destination) {
+    Airplane::fly(destination); // explicitly use the default implementation
+  }
+};
+```
+
+- Simple virtual function: inherit a function interface as well as a default implementation.
+- Non-virtual function: inherit a function interface as well as a mandatory implementation. It specifies an *invariant over specialization*.
+
+## Item 35: Consider alternatives to virtual functions.
