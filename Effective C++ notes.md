@@ -530,9 +530,8 @@ d.mf1(42); // fine, calls Base::mf1(int)
 
 ## Item 34: Differentiate between inheritance of interface and inheritance of implementation.
 
-- Pure virtual function: inherit a function interface only.
-
-  - It is possible to provide an implementation for a pure virtual function. It is useful when one wants to forbid implicit inheritance of the default implementation. It forces programmers to provide an implementation for the virtual function explicitly and retains the convenience of the default implementation.
+- **Pure virtual function**: inherit a function interface only.
+It is possible to provide an implementation for a pure virtual function. It is useful when one wants to forbid implicit inheritance of the default implementation. It forces programmers to provide an implementation for the virtual function explicitly and retains the convenience of the default implementation.
 ```c++
 class Airplane {
 public:
@@ -549,7 +548,113 @@ public:
 };
 ```
 
-- Simple virtual function: inherit a function interface as well as a default implementation.
-- Non-virtual function: inherit a function interface as well as a mandatory implementation. It specifies an *invariant over specialization*.
+- **Simple virtual function**: inherit a function interface as well as a default implementation.
+- **Non-virtual function**: inherit a function interface as well as a mandatory implementation. It specifies an *invariant over specialization*.
 
 ## Item 35: Consider alternatives to virtual functions.
+
+### Template Method Pattern via the Non-Virtual Interface Idion
+
+An alternative to public virtual functions. Declare a public non-virtual (interface) function and a private virtual function. Invoke the private virtual function inside the public non-virtual function. Notice that c++ allows overriding a private function.
+
+### Strategy Pattern via Function Pointers
+
+Take a function pointer in the constructor. Use `typedef` or `std::function<>` to represent the type of the function pointer. The latter one is much more powerful because it allows any callable object in that form.
+```c++
+typedef int (*HealthCalcFunc)(const GameCharacter&);
+// or in modern c++
+using HealthCalcFunc = std::function<int (const GameCharacter&)>
+```
+
+## Item 36: Never redefine an inherited non-virtual function.
+
+## Item 37: Never redefine a function's inherited default parameter value.
+
+Default parameter values are statically bound, while virtual functions are dynamically bound. It will be confusing if we redefine a function's inherited default parameter value.
+
+## Item 38: Model "has-a" or "is-implemented-in-terms-of" through composition.
+
+For example, if we want to implement `set` using `list`. Instead of having `set` inherit from `list`, we should put `list` inside `set` as a private member.
+
+## Item 39: Use private inheritance judiciously.
+
+Private inheritance does not model "is-a" (subtyping) relationship. It models "has-a" relationship instead. With private inheritance, a class only inherits implementation but not interface. Consider two classes A and B where A has a B. The capability that private inheritance provides is to access protected members or redefine virtual function of B. However, it is also viable to have a private class inside A with public inheritance from B and then use composition. The advantage of composition over private inheritance is to prevent derived classes of A redefining virtual functions and minimize the compilation dependencies. The disadvantage fo composition is the problem of freestanding objects.
+```c++
+class Empty {}; // use no memory
+
+class A {
+private:
+	int x;
+	Empty e; // freestadning object
+	// Compiler uses 1 empty byte to represent this empty object. 
+	// Occupy more space due to alignment.
+}
+
+class A: private Empty {
+private:
+	int x;
+	// sizeof(A) == sizeof(int)
+	// Compiler will optimze empty base class under single inheritance
+  // Empty Base Optimization.
+};
+```
+
+## Item 40: Use multiple inheritance judiciously.
+
+### Ambiguity when inherit the same name
+```c++
+class BorrowableItem {
+public:
+	void checkOut();
+};
+
+class ElectronicGadget {
+private:
+	bool checkOut() const;
+};
+
+class MP3Player: public BorrowableItem, public ElectronicGadget {
+};
+
+MP3Player mp;
+mp.checkOut(); // Compiler Error!
+```
+Even though `checkOut()` in `ElectronicGadget` only has private accessiblity, the compiler still complains because name lookup happens before finding the best-match function. It is a conservative strategy for the compiler. We can use `mp.BorrowableItem::checkOut()` to get around this limitation.
+
+### Deadly MI Diamong
+```c++
+class File { ... };
+class InputFile: public File { ... }; 
+class OutputFile: public File { ... }; 
+class IOFile: public InputFile, public OutputFile {...};
+// or virtual inheritance
+class InputFile: virtual public File { ... }; 
+class OutputFile: virtual public File { ... }; 
+class IOFile: public InputFile, public OutputFile {...};
+```
+Problem here is how many copies of fields in `File` `IOFile` should have. In c++, the default inheritance performs replication over all member fields and functions. It is possible to keep one copy by using *virtual inheritance* technique. Even though in most cases, *virtual inheritance* seems to be the correct way to go, it also incurs some performance costs and compilation complexities to access virtual base class's fields (In compiler, the most derived class is responsible for the initialization of the virtual base class now). The best practice here is to avoid putting data in virtual base classes, which leads to the c++ counterpart of Java interface.
+```c++
+class IPerson { // Interface, only declares functions to be implemented
+public:
+  virtual ~IPerson();
+  virtual std::string name() const = 0;
+  virtual std::string birthDate() const = 0; 
+};
+
+class PersonInfo { // Class, provides implementations to be inherited.
+public:
+	const char* theName() const;
+}
+
+class CPerson: public IPerson, private PersonInfo {
+public:
+	virtual std::string name() {
+		return PersonInfo::theName();
+	}
+}
+```
+Multiple inheritance design is very useful here. Public inheritance is used to inherit interface while private inheritance is used to inherit implementation.
+
+# Templates and Generic Programming
+
+## Item 41: Understand implicit interfaces and compile-time polymorphism.
