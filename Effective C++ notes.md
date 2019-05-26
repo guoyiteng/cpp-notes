@@ -799,3 +799,60 @@ Template metaprogramming can shift work from runtime to compile-time, thus enabl
 ## Item 49: Understand the behavior of the new-handler.
 
 `set_new_handler` allows you to specify a function to be called when memory allocation requests cannot be satisfied. One can override a member function `static void* operator new(std::size_t size) throw(std::bad_alloc)` to customize the behavior of allocating memory for the specific class. Note that it only overrides the allocator (allocating the memory) but not the constructor (initializing the object) here.
+
+## Item 50: Understand when it makes sense to replace *new* and *delete*.
+
+ There are some valid reasons to customize `new` and `delete`, including improving performance, debugging heap usage errors, and collecting heap usage information. It is sometimes possible to use third-party implementation (Pool from Boost) to accomplish these goals. When customizing `new`, we should pay attention to the address alignment problem. c++ `new` and `malloc` return an address that aligns for any data type, and our implementation should also obey the alignment rule (could only align for a specific type if we know the data type we would `new`).
+
+```c++
+// customizing global new operator.
+void* operator new(size_t size);
+
+class A {
+public:
+  // customizing object new operator;
+	static void* operator new(size_t size);  
+}
+
+// customizing global new array operator.
+void* operator new[](size_t size) {
+	// default implementation in clang.
+  return ::operator new(size);
+}
+```
+
+## Item 51: Adhere to convention when writing new and delete.
+
+- Operator `new` should contain an infinite loop trying to allocate memory, should call the new-handler if it can't satisfy a memory request, and should handle requests for zero bytes. Class-specific versions should handle requests for larger blocks than expected because `new` is also inherited by the derived class.
+- Operator `delete` should do nothing if passed a pointer that is null. Class-specific versions should handle blocks that are larger than expected.
+
+## Item 52: Write placement delete if you write placement new.
+
+- When you write a placement version of operator `new`, be sure to write the corresponding placement version of operator `delete`. The compiler runtime will invoke its corresponding placement version of `delete` when there is an exception in the constructor.
+
+- When you declare placement versions of new and delete, be sure not to unintentionally hide the normal versions of those functions.
+
+```c++
+class StandardNewDeleteForm {
+public:
+	static void* operator new(std::size_t size) 
+	{return ::operator new(size)}
+	// omit other new and delete operators.
+}
+
+class Widget: public StandardNewDeleteForm {
+public:
+	using StandardNewDeleteForm::operator new;
+	using StandardNewDeleteForm::operator delete;
+	// using ::operator new; is wrong
+	// because using declaration inside a class definition can only use its  base class.
+}
+```
+
+# Miscellany
+
+## Item 53: Pay attention to compiler warnings.
+
+## Item 54: Familiarize yourself with the standard library, including TR1.
+
+## Item 55: Familiarize yourself with Boost.
