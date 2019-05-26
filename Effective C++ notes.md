@@ -161,7 +161,7 @@ Widget& operator=(int rhs) {...; return *this; }
 
 ## Item 11: Handle assignment to self in `operator=`.
 
-Copy assignment operator can perform self assignment. It will generate some unsafe code if we use a nake pointer and forget to do the identity check.
+Copy assignment operator can perform self assignment. It will generate some unsafe code if we use a naked pointer and forget to do the identity check.
 ```c++
 Widget::operator=(const Widget& rhs)
 {
@@ -231,7 +231,7 @@ public:
 
 ## Item 16: Use the same form in corresponding uses of `new` and `delete`.
 
-If you use `[]` in a `new` expression, you m ust use `[]` in the corresponding `delete` expression. Attention is needed when `typedef int lines[4]` is present. In this case, we do `int *p = new lines` and `delete [] p`.
+If you use `[]` in a `new` expression, you must use `[]` in the corresponding `delete` expression. Attention is needed when `typedef int lines[4]` is present. In this case, we do `int *p = new lines` and `delete [] p`.
 
 ## Item 17: Store newed objects in smart pointers in standalone statements.
 
@@ -621,7 +621,7 @@ mp.checkOut(); // Compiler Error!
 ```
 Even though `checkOut()` in `ElectronicGadget` only has private accessiblity, the compiler still complains because name lookup happens before finding the best-match function. It is a conservative strategy for the compiler. We can use `mp.BorrowableItem::checkOut()` to get around this limitation.
 
-### Deadly MI Diamong
+### Deadly Multiple Inheritance Diamond
 ```c++
 class File { ... };
 class InputFile: public File { ... }; 
@@ -658,3 +658,144 @@ Multiple inheritance design is very useful here. Public inheritance is used to i
 # Templates and Generic Programming
 
 ## Item 41: Understand implicit interfaces and compile-time polymorphism.
+
+- Both classes and templates support interfaces and polymorphism.
+- For classes, interfaces are explicit and centered on function signatures. Polymorphism occurs at runtime through virtual functions.
+- For template parameters, interfaces are implicit and based on valid expressions. Polymorphism occurs during compilation through template instantiation and function overloading resolution.
+
+## Item 42: Understand the two meanings of *typename*.
+
+- When declaring template parameters, class and typename are interchangeable.
+- Use *typename* to identify nested dependent type names, except in base class lists or as a base class identifier in a member initialization list.
+```c++
+template<typename C>
+void print2nd(const C& container) {
+	C::const_iterator * x; // C::const_iterator is a nested dependent name.
+	// Ambiguous here! Declare a variable x with type C::const_iterator
+	// or Multiply a static data member C::const_iterator with x
+}
+// c++ resolves this ambiguity by considering any nested dependent name is not type.
+template<typename C>
+void print2nd(const C& container) {
+	// Need to put `typename` before the nested dependent name to tell c++ it is a type.
+	typename C::const_iterator * x;
+}
+// Exception: `typename` must not appear in base class clists 
+//            or as a base class identifier in a member initialization list
+template<typename T> 
+class Derived: public Base<T>::Nested { // disallowed.
+public:
+	explicit Derived(int x) : Base<T>::Nested(x) { // disallowed.
+		typename Base<T>::Nested temp; // required.
+	}
+};
+```
+
+## Item 43: Know how to access names in templatized base classes.
+
+When a class inherits from a templatized base class, we do not know if a function exists in the base class due to the possibility of total template specilization. Compiler will be conservative about this and disallow use of member functions/fields from the templatized base class. However, we can still access them if we explicitly specify it by `this->func()` or `using` syntax. Examples are shown below. 
+
+```c++
+template<typename Company>
+class LoggingMsgSender: public MsgSender<Company> { 
+public:
+	void sendClearMsg(const MsgInfo& info) {
+		sendClear(info); // sendClear is a member function in MsgSender
+		// Complier Error here! Compiler does not know if MsgSender<Company>
+		// implements sendClear()
+	}
+};
+
+// It is possible that MsgSender<Company> does not implement sendClear with Total Template Specilization. 
+// Compiler will use this implementation if the template argument is CompanyZ.
+template<>
+class MsgSender<CompanyZ> {
+// does not include sendClear()
+}
+
+// Solution (within sendClearMsg):
+this->sendClear(info);
+// or
+using MsgSender<Company>::sendClear;
+sendClear(info);
+```
+
+## Item 44: Factor parameter-independent code out of templates.
+
+Any template code not dependent on a template parameter causes bloat. It can be avoided by replacing template parameters with function parameters or class data members.
+
+## Item 45: Use member function templates to accept "all compatible types."
+
+In the following example, we allow implicit cast from `SmartPtr<U>` to `SmartPtr<T>` by implementing a generalized copy constructor. We use `ptr(other.get())` to make sure this implicit conversion is sensible because the compiler allows conversion from `U*` to `T*`. We can use the same technique on copy assignment operator. Note that generalized copy constructors are not copy constructor so the compiler will still generate a default copy constructor. We can override the default one by declaring a copy constructor for `SmartPtr`.
+```c++
+template<typename T>
+class SmartPtr{
+public:
+  template<typename U>
+  SmartPtr(const SmartPtr<U>& other) // template copy constructor to accept all SmartPtr.
+  : ptr(other.get()) // implicitly convert from U* to T*.
+  {}
+  
+  // We should use SmartPtr instead SmartPtr<T> to reference itself inside SmartPtr class.
+  SmartPtr(const SmartPtr& other)
+  : ptr(other.get())
+  {}
+  
+private:
+	T *ptr;
+}
+```
+
+## Item 46: Define non-member functions inside templates when type conversions are desired.
+
+Say we want to overload `operator*` for a class `Rational<T>`. Here are several ways to accomplish it.
+```c++
+template<typename T>
+class Rational
+{
+public:
+    Rational(T _n, T _d): n(_n), d(_d) {}
+    Rational(T _n): n(_n), d(1) {}
+    // option 1:
+    // only work for R * 2 but not 2 * R
+    const Rational operator*(const Rational& r) {
+        return Rational(r.n * n, r.d * d);
+    }
+    
+    // option 3:
+    friend const Rational operator*(const Rational& l, const Rational& r);
+    // define it outside this class.
+    // Link Error! The compiler will not instantiate this friend function if it is defined outside this class.
+
+    // option 4:
+    // Work for every case including 2 * R and R * 2.
+    friend const Rational operator*(const Rational& l, const Rational& r) {
+        return Rational(r.n * l.n, r.d * l.d);
+    }
+private:
+    T n, d;
+};
+
+// option 2:
+template<typename T>
+const Rational<T> operator*(const Rational<T>& l, const Rational<T>& r) {}
+// It does not work for both 2 * R and R * 2 because compiler deduce
+// the template function on parameter separately. It cannot deduce the
+// implicit type conversion from 2 to Rational<int>;
+
+```
+Option 4 is the correct way to go. We use several techniques here. We can provide a definition for a friend function inside the class. Note that the friend function is still a non-member function even though it is defined inside the class. Within a template class, `Rational` is a shorthand for `Rational<T>` where `T` is the type parameter of this template class. The underlying reason that option 4 works but option 2 does not is that option 2 is a templatized function while option 4 is a function inside a templatized class. When deducing a function inside a templatized class, the c++ compiler will be smart and consider both parameters at the same time.
+
+## Item 47: Use traits classes for information about types.
+
+Trait is a technique we can use to distinguish the type parameter of a template class. See [`item47.cpp`](./item47.cpp) for an example. In realtiy, we can use `char_traits` to hold information about character types, `numeric_limits` to store the minimum and maximum of number types, and etc.
+
+## Item 48: Be aware of template metaprogramming.
+
+Template metaprogramming can shift work from runtime to compile-time, thus enabling earlier error detection and higher runtime performance. In modern c++, it can be achieved by `constexpr` instead of template.
+
+# Customizing *new* and *delete*
+
+## Item 49: Understand the behavior of the new-handler.
+
+`set_new_handler` allows you to specify a function to be called when memory allocation requests cannot be satisfied. One can override a member function `static void* operator new(std::size_t size) throw(std::bad_alloc)` to customize the behavior of allocating memory for the specific class. Note that it only overrides the allocator (allocating the memory) but not the constructor (initializing the object) here.
